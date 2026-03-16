@@ -49,15 +49,22 @@ const ParentRegistration = () => {
     if (!childSchoolId || (!childId && !childName)) return;
 
     try {
-      const { data, error } = await supabase.functions.invoke("verify-student", {
-        body: { childName, childId, schoolId: childSchoolId },
-      });
+      let query = supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("school_id", childSchoolId);
 
-      if (error) throw error;
+      if (childId) {
+        query = query.eq("id_number", childId);
+      } else {
+        query = query.ilike("full_name", `%${childName.trim()}%`);
+      }
 
-      if (data?.found) {
+      const { data } = await query.limit(1);
+
+      if (data && data.length > 0) {
         setChildVerified(true);
-        toast({ title: `הילד/ה ${data.student?.full_name || childName} אומת/ה ✅` });
+        toast({ title: `הילד/ה ${data[0].full_name} אומת/ה ✅` });
       } else {
         setChildVerified(false);
         toast({

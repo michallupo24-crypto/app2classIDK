@@ -46,46 +46,30 @@ const ParentRegistration = () => {
   }, []);
 
   const verifyChild = async () => {
-    if (!childSchoolId) return;
+    if (!childSchoolId || (!childId && !childName)) return;
 
-    // Try by id_number first (if provided)
-    if (childId) {
-      const { data: byId } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("id_number", childId)
-        .eq("school_id", childSchoolId)
-        .maybeSingle();
+    try {
+      const { data, error } = await supabase.functions.invoke("verify-student", {
+        body: { childName, childId, schoolId: childSchoolId },
+      });
 
-      if (byId) {
+      if (error) throw error;
+
+      if (data?.found) {
         setChildVerified(true);
-        toast({ title: `הילד/ה ${byId.full_name} אומת/ה ✅` });
-        return;
+        toast({ title: `הילד/ה ${data.student?.full_name || childName} אומת/ה ✅` });
+      } else {
+        setChildVerified(false);
+        toast({
+          title: "הילד/ה לא נמצא/ה",
+          description: "ודא שהתלמיד/ה רשום/ה במערכת ושם בית הספר נכון",
+          variant: "destructive",
+        });
       }
+    } catch (err: any) {
+      setChildVerified(false);
+      toast({ title: "שגיאה באימות", description: err.message, variant: "destructive" });
     }
-
-    // Fallback: search by name + school
-    if (childName) {
-      const { data: byName } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("school_id", childSchoolId)
-        .ilike("full_name", `%${childName.trim()}%`)
-        .limit(1);
-
-      if (byName && byName.length > 0) {
-        setChildVerified(true);
-        toast({ title: `הילד/ה ${byName[0].full_name} אומת/ה ✅` });
-        return;
-      }
-    }
-
-    setChildVerified(false);
-    toast({
-      title: "הילד/ה לא נמצא/ה",
-      description: "ודא שהתלמיד/ה רשום/ה במערכת ושם בית הספר נכון",
-      variant: "destructive",
-    });
   };
 
   const step1Valid = firstName && lastName && phone && email && password.length >= 6 && childName && childSchoolId && childVerified === true;

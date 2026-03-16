@@ -46,25 +46,49 @@ const ParentRegistration = () => {
   }, []);
 
   const verifyChild = async () => {
-    if (!childId || !childSchoolId) return;
+    if (!childSchoolId) return;
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .eq("id_number", childId)
-      .eq("school_id", childSchoolId)
-      .single();
+    // Try by id_number first (if provided)
+    if (childId) {
+      const { data: byId } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("id_number", childId)
+        .eq("school_id", childSchoolId)
+        .maybeSingle();
 
-    if (data) {
-      setChildVerified(true);
-      toast({ title: "הילד/ה נמצא/ה במערכת ✅" });
-    } else {
-      setChildVerified(false);
-      toast({ title: "הילד/ה לא נמצא/ה", description: "התלמיד/ה חייב/ת להיות רשום/ה במערכת לפני רישום הורה", variant: "destructive" });
+      if (byId) {
+        setChildVerified(true);
+        toast({ title: `הילד/ה ${byId.full_name} אומת/ה ✅` });
+        return;
+      }
     }
+
+    // Fallback: search by name + school
+    if (childName) {
+      const { data: byName } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("school_id", childSchoolId)
+        .ilike("full_name", `%${childName.trim()}%`)
+        .limit(1);
+
+      if (byName && byName.length > 0) {
+        setChildVerified(true);
+        toast({ title: `הילד/ה ${byName[0].full_name} אומת/ה ✅` });
+        return;
+      }
+    }
+
+    setChildVerified(false);
+    toast({
+      title: "הילד/ה לא נמצא/ה",
+      description: "ודא שהתלמיד/ה רשום/ה במערכת ושם בית הספר נכון",
+      variant: "destructive",
+    });
   };
 
-  const step1Valid = firstName && lastName && phone && email && password.length >= 6 && childName && childId && childSchoolId && childVerified === true;
+  const step1Valid = firstName && lastName && phone && email && password.length >= 6 && childName && childSchoolId && childVerified === true;
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -245,7 +269,7 @@ const ParentRegistration = () => {
                 </Select>
               </div>
 
-              {childId && childSchoolId && childVerified === null && (
+              {(childId || childName) && childSchoolId && childVerified === null && (
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
